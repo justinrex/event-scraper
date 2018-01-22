@@ -5,7 +5,7 @@ const jsdom = require('jsdom')
 const app = express()
 const { JSDOM } = jsdom
 
-let titles = []
+let events = []
 
 const init = async () => {
   const response = await fetch('https://www.events12.com/atlanta/')
@@ -14,13 +14,14 @@ const init = async () => {
   const articles = dom.window.document.querySelectorAll('article')
   
   articles.forEach(article => {
-    titles.push(`${article.querySelector('h3').textContent} : ${article.querySelector('.date').textContent}`)
+    events.push(`${article.querySelector('h3').textContent} : ${article.querySelector('.date').textContent}`)
   })
 }
 
 app.get('/', async (req, res) => {
-  res.send(titles.join('<br />'))
+  res.send(events.join('<br />'))
 })
+
 app.listen(3000, () => {
   init()
   console.log('App listening on port 3000')
