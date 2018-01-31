@@ -1,4 +1,4 @@
-const MongoClient = require('./mongoClient')
+const MongoClient = require('../server/mongoClient')
 
 module.exports = {
   save: events => MongoClient.save('events', events),
