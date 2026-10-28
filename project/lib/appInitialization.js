@@ -1,32 +1,39 @@
-const fetch = require('isomorphic-fetch')
-const JSDOM = require('jsdom').JSDOM
-const Events = require('../models/events')
-const months = require('./months').months
-const dateRegex = /(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(tember)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+\d{1,2},\s+\d{4}/
+const { JSDOM } = require('jsdom');
+const Events = require('../models/events');
+const { months } = require('./months');
 
-module.exports = { 
-  init: () => {
-    months.forEach(async month => {
-      const url = `https://www.events12.com/atlanta/${month}`
-      const response = await fetch(url)
-      const pageText = await response.text()
-      const dom = new JSDOM(pageText)
-      const articles = dom.window.document.querySelectorAll('article')
-      let events = []
-
-      articles.forEach(article => {
-        const rawDate = article.querySelector('.date').textContent.toLowerCase()
-        // const scrubbedDate = (rawDate.match(dateRegex) || [])[0]
-        // new Date(scrubbedDate)
-        // if (scrubbedDate == undefined) console.log(rawDate)
-        
-        events.push({
-          title: article.querySelector('h3').textContent,
-          date: rawDate,
-        })
-      })
-
-      Events.save(events)
-    })
+function parseEvents(html) {
+  const dom = new JSDOM(html);
+  try {
+    return Array.from(dom.window.document.querySelectorAll('article')).flatMap(article => {
+      const title = article.querySelector('h3')?.textContent.trim();
+      const date = article.querySelector('.date')?.textContent.trim().toLowerCase();
+      return title && date ? [{ title, date }] : [];
+    });
+  } finally {
+    dom.window.close();
   }
 }
+
+async function init({ fetchPage = fetch, save = Events.save, monthNames = months } = {}) {
+  let count = 0;
+  for (const month of monthNames) {
+    const response = await fetchPage(`https://www.events12.com/atlanta/${month}`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Unable to fetch ${month}: HTTP ${response.status}`);
+    const events = parseEvents(await response.text());
+    await save(events);
+    count += events.length;
+  }
+  return count;
+}
+
+if (require.main === module) {
+  init().then(count => console.log(`Saved ${count} event listings.`)).catch(error => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { init, parseEvents };
